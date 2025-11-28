@@ -1,6 +1,6 @@
 # Dual Database Demo
 
-A Spring Boot application demonstrating CRUD operations with **dual database** support using **R2DBC** (Reactive Relational Database Connectivity) for both **MySQL 9.0** and **PostgreSQL 17**.
+A Spring Boot application demonstrating CRUD operations with **dual database** support using **R2DBC** (Reactive Relational Database Connectivity) for both **MySQL 9.5.0** and **PostgreSQL 18**.
 
 ## Features
 
@@ -13,12 +13,12 @@ A Spring Boot application demonstrating CRUD operations with **dual database** s
 
 ## Tech Stack
 
-- Java 21
-- Spring Boot 3.4.1
+- Java 25
+- Spring Boot 4.0.0
 - Spring WebFlux
 - Spring Data R2DBC
-- MySQL 9.0
-- PostgreSQL 17
+- MySQL 9.5.0
+- PostgreSQL 18
 - Docker Compose
 - Lombok
 
@@ -49,7 +49,7 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 
 ## Prerequisites
 
-- Java 21+
+- Java 25
 - Docker & Docker Compose
 - Maven
 
@@ -62,8 +62,8 @@ docker compose up -d
 ```
 
 This will start:
-- MySQL 9.0 on port `3308`
-- PostgreSQL 17 on port `5433`
+- MySQL 9.5.0 on port `3308`
+- PostgreSQL 18 on port `5433`
 
 ### 2. Run the Application
 
