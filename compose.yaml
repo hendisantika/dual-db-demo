@@ -1,0 +1,41 @@
+services:
+  mysql:
+    image: 'mysql:9.5.0'
+    container_name: dual-db-mysql
+    environment:
+      - 'MYSQL_DATABASE=profile-http'
+      - 'MYSQL_PASSWORD=53cret'
+      - 'MYSQL_ROOT_PASSWORD=53cret'
+      - 'MYSQL_USER=yu71'
+    ports:
+      - '3308:3306'
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+      - ./init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: 'postgres:18'
+    container_name: dual-db-postgres
+    environment:
+      - 'POSTGRES_DB=profile_http'
+      - 'POSTGRES_PASSWORD=53cret'
+      - 'POSTGRES_USER=yu71'
+    ports:
+      - '5433:5432'
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U yu71 -d profile_http" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+  postgres_data:
