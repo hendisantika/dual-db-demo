@@ -1,7 +1,8 @@
 services:
-  mysql:
+  # Primary MySQL instance
+  mysql-primary:
     image: 'mysql:9.5.0'
-    container_name: dual-db-mysql
+    container_name: dual-db-mysql-primary
     environment:
       - 'MYSQL_DATABASE=profile-http'
       - 'MYSQL_PASSWORD=53cret'
@@ -10,7 +11,7 @@ services:
     ports:
       - '3308:3306'
     volumes:
-      - ./mysql_data:/var/lib/mysql
+      - ./mysql_primary_data:/var/lib/mysql
       - ./init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
@@ -18,9 +19,30 @@ services:
       timeout: 5s
       retries: 5
 
-  postgres:
+  # Secondary MySQL instance (for failover)
+  mysql-secondary:
+    image: 'mysql:9.5.0'
+    container_name: dual-db-mysql-secondary
+    environment:
+      - 'MYSQL_DATABASE=profile-http'
+      - 'MYSQL_PASSWORD=53cret'
+      - 'MYSQL_ROOT_PASSWORD=53cret'
+      - 'MYSQL_USER=yu71'
+    ports:
+      - '3309:3306'
+    volumes:
+      - ./mysql_secondary_data:/var/lib/mysql
+      - ./init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Primary PostgreSQL instance
+  postgres-primary:
     image: 'postgres:18'
-    container_name: dual-db-postgres
+    container_name: dual-db-postgres-primary
     environment:
       - 'POSTGRES_DB=profile_http'
       - 'POSTGRES_PASSWORD=53cret'
@@ -28,7 +50,26 @@ services:
     ports:
       - '5433:5432'
     volumes:
-      - ./postgres_data:/var/lib/postgresql
+      - ./postgres_primary_data:/var/lib/postgresql
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U yu71 -d profile_http" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Secondary PostgreSQL instance (for failover)
+  postgres-secondary:
+    image: 'postgres:18'
+    container_name: dual-db-postgres-secondary
+    environment:
+      - 'POSTGRES_DB=profile_http'
+      - 'POSTGRES_PASSWORD=53cret'
+      - 'POSTGRES_USER=yu71'
+    ports:
+      - '5434:5432'
+    volumes:
+      - ./postgres_secondary_data:/var/lib/postgresql
       - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U yu71 -d profile_http" ]
@@ -37,5 +78,7 @@ services:
       retries: 5
 
 volumes:
-  mysql_data:
-  postgres_data:
+  mysql_primary_data:
+  mysql_secondary_data:
+  postgres_primary_data:
+  postgres_secondary_data:

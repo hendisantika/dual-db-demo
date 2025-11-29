@@ -4,7 +4,11 @@ target/
 !**/src/test/**/target/
 logs
 mysql_data
+mysql_primary_data
+mysql_secondary_data
 postgres_data
+postgres_primary_data
+postgres_secondary_data
 
 ### STS ###
 .apt_generated
