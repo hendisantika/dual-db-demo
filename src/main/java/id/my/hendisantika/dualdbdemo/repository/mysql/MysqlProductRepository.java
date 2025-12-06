@@ -1,9 +1,10 @@
 package id.my.hendisantika.dualdbdemo.repository.mysql;
 
 import id.my.hendisantika.dualdbdemo.entity.mysql.MysqlProduct;
-import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 /**
  * Created by IntelliJ IDEA.
@@ -17,7 +18,7 @@ import reactor.core.publisher.Flux;
  * To change this template use File | Settings | File Templates.
  */
 @Repository
-public interface MysqlProductRepository extends R2dbcRepository<MysqlProduct, Long> {
+public interface MysqlProductRepository extends JpaRepository<MysqlProduct, Long> {
 
-    Flux<MysqlProduct> findByNameContainingIgnoreCase(String name);
+    List<MysqlProduct> findByNameContainingIgnoreCase(String name);
 }

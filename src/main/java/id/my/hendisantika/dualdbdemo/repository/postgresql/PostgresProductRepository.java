@@ -1,9 +1,10 @@
 package id.my.hendisantika.dualdbdemo.repository.postgresql;
 
 import id.my.hendisantika.dualdbdemo.entity.postgresql.PostgresProduct;
-import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 /**
  * Created by IntelliJ IDEA.
@@ -17,7 +18,7 @@ import reactor.core.publisher.Flux;
  * To change this template use File | Settings | File Templates.
  */
 @Repository
-public interface PostgresProductRepository extends R2dbcRepository<PostgresProduct, Long> {
+public interface PostgresProductRepository extends JpaRepository<PostgresProduct, Long> {
 
-    Flux<PostgresProduct> findByNameContainingIgnoreCase(String name);
+    List<PostgresProduct> findByNameContainingIgnoreCase(String name);
 }

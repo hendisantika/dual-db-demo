@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 /**
  * Created by IntelliJ IDEA.
@@ -33,13 +33,13 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping("/all")
-    public Flux<ProductResponse> getAllProductsFromBothDatabases() {
+    public List<ProductResponse> getAllProductsFromBothDatabases() {
         return productService.getAllProductsFromBothDatabases();
     }
 
     @PostMapping("/sync")
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<Void> syncProductToBothDatabases(@RequestBody ProductRequest request) {
-        return productService.syncProductToBothDatabases(request);
+    public void syncProductToBothDatabases(@RequestBody ProductRequest request) {
+        productService.syncProductToBothDatabases(request);
     }
 }

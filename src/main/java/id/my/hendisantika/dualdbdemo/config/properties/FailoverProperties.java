@@ -18,4 +18,5 @@ public class FailoverProperties {
     private boolean enabled = false;
     private int maxRetries = 3;
     private long retryDelay = 1000;
+    private long healthCheckInterval = 30000;
 }

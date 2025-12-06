@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 /**
  * Created by IntelliJ IDEA.
@@ -39,37 +39,37 @@ public class PostgresProductController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<ProductResponse> createProduct(@RequestBody ProductRequest request) {
+    public ProductResponse createProduct(@RequestBody ProductRequest request) {
         return productService.createPostgresProduct(request);
     }
 
     @GetMapping
-    public Flux<ProductResponse> getAllProducts() {
+    public List<ProductResponse> getAllProducts() {
         return productService.getAllPostgresProducts();
     }
 
     @GetMapping("/{id}")
-    public Mono<ResponseEntity<ProductResponse>> getProductById(@PathVariable Long id) {
+    public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
         return productService.getPostgresProductById(id)
                 .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.notFound().build());
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{id}")
-    public Mono<ResponseEntity<ProductResponse>> updateProduct(@PathVariable Long id, @RequestBody ProductRequest request) {
+    public ResponseEntity<ProductResponse> updateProduct(@PathVariable Long id, @RequestBody ProductRequest request) {
         return productService.updatePostgresProduct(id, request)
                 .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.notFound().build());
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public Mono<Void> deleteProduct(@PathVariable Long id) {
-        return productService.deletePostgresProduct(id);
+    public void deleteProduct(@PathVariable Long id) {
+        productService.deletePostgresProduct(id);
     }
 
     @GetMapping("/search")
-    public Flux<ProductResponse> searchProducts(@RequestParam String name) {
+    public List<ProductResponse> searchProducts(@RequestParam String name) {
         return productService.searchPostgresProducts(name);
     }
 }

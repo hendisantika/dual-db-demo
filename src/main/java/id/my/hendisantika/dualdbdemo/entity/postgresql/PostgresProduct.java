@@ -1,12 +1,15 @@
 package id.my.hendisantika.dualdbdemo.entity.postgresql;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,27 +29,29 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("products")
+@Entity
+@Table(name = "products")
 public class PostgresProduct {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column("name")
+    @Column(name = "name", nullable = false)
     private String name;
 
-    @Column("description")
+    @Column(name = "description")
     private String description;
 
-    @Column("price")
+    @Column(name = "price", precision = 19, scale = 2)
     private BigDecimal price;
 
-    @Column("quantity")
+    @Column(name = "quantity")
     private Integer quantity;
 
-    @Column("created_at")
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column("updated_at")
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 }

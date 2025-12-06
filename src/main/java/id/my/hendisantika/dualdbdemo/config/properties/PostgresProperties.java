@@ -18,12 +18,12 @@ import java.util.List;
  * To change this template use File | Settings | File Templates.
  */
 @Data
-@ConfigurationProperties(prefix = "spring.r2dbc.postgresql")
+@ConfigurationProperties(prefix = "spring.datasource.postgresql")
 public class PostgresProperties {
     private List<DatabaseHost> hosts = new ArrayList<>();
     private String database;
     private String username;
     private String password;
-    private PoolProperties pool = new PoolProperties();
+    private HikariPoolProperties pool = new HikariPoolProperties();
     private FailoverProperties failover = new FailoverProperties();
 }
