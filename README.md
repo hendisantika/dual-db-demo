@@ -3,6 +3,12 @@
 A Spring Boot application demonstrating CRUD operations with **dual database** support using **Spring Data JPA** with *
 *HikariCP** for both **MySQL 9.5.0** and **PostgreSQL 18** with **automatic database connection failover** support.
 
+This project also showcases **Project Loom** features available in JDK 25:
+
+- **Virtual Threads** - Lightweight threads for high-throughput concurrent applications
+- **Structured Concurrency** - Managing concurrent subtasks as a unit of work
+- **Scoped Values** - Sharing immutable data across threads safely
+
 ## Features
 
 - CRUD operations using Spring Data JPA
@@ -13,19 +19,23 @@ A Spring Boot application demonstrating CRUD operations with **dual database** s
 - Health check endpoints via Spring Actuator
 - Docker Compose setup for databases (primary & secondary instances)
 - Sync product to both databases simultaneously
+- **Virtual Threads** for all HTTP request handling
+- **Structured Concurrency** for parallel database operations
+- **Scoped Values** for request context propagation
 
 ## Tech Stack
 
-- Java 24 (compatible with JDK 25 when available)
+- **Java 25** with Preview Features enabled
 - Spring Boot 4.0.0
 - Spring Framework 7.0.1
-- Spring Web MVC
+- Spring Web MVC (with Virtual Threads)
 - Spring Data JPA
 - HikariCP (Connection Pooling)
 - MySQL 9.5.0
 - PostgreSQL 18
 - Docker Compose
-- Lombok (edge-SNAPSHOT for JDK 24+ compatibility)
+- Lombok (edge-SNAPSHOT for JDK 25 compatibility)
+- **Project Loom**: Virtual Threads, Structured Concurrency, Scoped Values
 
 ## Project Structure
 
@@ -41,6 +51,8 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 │       ├── FailoverProperties.java    # Failover configuration
 │       ├── MysqlProperties.java       # MySQL-specific properties
 │       └── PostgresProperties.java    # PostgreSQL-specific properties
+├── context/
+│   └── RequestContext.java            # Scoped Values for request context
 ├── controller/
 │   ├── MysqlProductController.java    # MySQL CRUD endpoints
 │   ├── PostgresProductController.java # PostgreSQL CRUD endpoints
@@ -55,7 +67,7 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 │   ├── mysql/MysqlProductRepository.java
 │   └── postgresql/PostgresProductRepository.java
 └── service/
-    └── ProductService.java
+    └── ProductService.java            # Uses Structured Concurrency + Scoped Values
 ```
 
 ## Prerequisites
