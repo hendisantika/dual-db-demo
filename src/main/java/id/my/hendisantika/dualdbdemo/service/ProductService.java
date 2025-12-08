@@ -1,5 +1,6 @@
 package id.my.hendisantika.dualdbdemo.service;
 
+import id.my.hendisantika.dualdbdemo.context.RequestContext;
 import id.my.hendisantika.dualdbdemo.dto.ProductRequest;
 import id.my.hendisantika.dualdbdemo.dto.ProductResponse;
 import id.my.hendisantika.dualdbdemo.entity.mysql.MysqlProduct;
@@ -12,10 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.UUID;
+import java.util.concurrent.StructuredTaskScope;
+import java.util.stream.Stream;
 
 /**
  * Created by IntelliJ IDEA.
@@ -156,38 +158,101 @@ public class ProductService {
                 .toList();
     }
 
-    // Get all products from both databases
+    /**
+     * Get all products from both databases using Structured Concurrency (JDK 25+)
+     * combined with Scoped Values for request context propagation.
+     * <p>
+     * Features demonstrated:
+     * - StructuredTaskScope: Manages concurrent subtasks with automatic cleanup
+     * - ScopedValue: Propagates correlation ID to all forked subtasks
+     * - Virtual Threads: Subtasks run on lightweight virtual threads
+     */
     public List<ProductResponse> getAllProductsFromBothDatabases() {
-        // Execute both queries in parallel using CompletableFuture
-        CompletableFuture<List<ProductResponse>> mysqlFuture = CompletableFuture.supplyAsync(this::getAllMysqlProducts);
-        CompletableFuture<List<ProductResponse>> postgresFuture = CompletableFuture.supplyAsync(this::getAllPostgresProducts);
+        String correlationId = UUID.randomUUID().toString().substring(0, 8);
 
-        // Wait for both to complete and merge results
-        List<ProductResponse> allProducts = new ArrayList<>();
-        try {
-            allProducts.addAll(mysqlFuture.get());
-            allProducts.addAll(postgresFuture.get());
-        } catch (Exception e) {
-            log.error("Error fetching products from both databases", e);
-            throw new RuntimeException("Failed to fetch products from both databases", e);
-        }
+        // Use ScopedValue to propagate context to subtasks
+        return ScopedValue.where(RequestContext.CORRELATION_ID, correlationId)
+                .where(RequestContext.OPERATION, "getAllProductsFromBothDatabases")
+                .call(() -> {
+                    log.info("[{}] Starting parallel fetch from both databases", RequestContext.getCorrelationId());
 
-        return allProducts;
+                    try (var scope = StructuredTaskScope.open()) {
+                        // Fork both database queries - they inherit the ScopedValue context
+                        var mysqlTask = scope.fork(() -> {
+                            log.debug("[{}] Fetching from MySQL", RequestContext.getCorrelationId());
+                            return getAllMysqlProducts();
+                        });
+                        var postgresTask = scope.fork(() -> {
+                            log.debug("[{}] Fetching from PostgreSQL", RequestContext.getCorrelationId());
+                            return getAllPostgresProducts();
+                        });
+
+                        // Wait for all subtasks to complete (or one to fail)
+                        scope.join();
+
+                        // Merge results from both databases
+                        log.info("[{}] Successfully fetched products from both databases", RequestContext.getCorrelationId());
+                        return Stream.concat(
+                                mysqlTask.get().stream(),
+                                postgresTask.get().stream()
+                        ).toList();
+
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.error("[{}] Interrupted while fetching products", RequestContext.getCorrelationId(), e);
+                        throw new RuntimeException("Interrupted while fetching products", e);
+                    } catch (StructuredTaskScope.FailedException e) {
+                        log.error("[{}] A subtask failed while fetching products", RequestContext.getCorrelationId(), e.getCause());
+                        throw new RuntimeException("Failed to fetch products from both databases", e.getCause());
+                    }
+                });
     }
 
-    // Sync product to both databases
+    /**
+     * Sync product to both databases using Structured Concurrency (JDK 25+)
+     * combined with Scoped Values for request context propagation.
+     *
+     * Features demonstrated:
+     * - StructuredTaskScope: Manages concurrent subtasks with fail-fast behavior
+     * - ScopedValue: Propagates correlation ID and operation context to subtasks
+     * - Virtual Threads: Subtasks run on lightweight virtual threads
+     */
     public void syncProductToBothDatabases(ProductRequest request) {
-        // Execute both inserts in parallel
-        CompletableFuture<ProductResponse> mysqlFuture = CompletableFuture.supplyAsync(() -> createMysqlProduct(request));
-        CompletableFuture<ProductResponse> postgresFuture = CompletableFuture.supplyAsync(() -> createPostgresProduct(request));
+        String correlationId = UUID.randomUUID().toString().substring(0, 8);
 
-        try {
-            CompletableFuture.allOf(mysqlFuture, postgresFuture).get();
-            log.info("Synced product to both databases: {}", request.getName());
-        } catch (Exception e) {
-            log.error("Error syncing product to both databases", e);
-            throw new RuntimeException("Failed to sync product to both databases", e);
-        }
+        // Use ScopedValue to propagate context to subtasks
+        ScopedValue.where(RequestContext.CORRELATION_ID, correlationId)
+                .where(RequestContext.OPERATION, "syncProductToBothDatabases")
+                .run(() -> {
+                    log.info("[{}] Starting parallel sync to both databases for product: {}",
+                            RequestContext.getCorrelationId(), request.getName());
+
+                    try (var scope = StructuredTaskScope.open()) {
+                        // Fork both insert operations - they inherit the ScopedValue context
+                        scope.fork(() -> {
+                            log.debug("[{}] Creating product in MySQL", RequestContext.getCorrelationId());
+                            return createMysqlProduct(request);
+                        });
+                        scope.fork(() -> {
+                            log.debug("[{}] Creating product in PostgreSQL", RequestContext.getCorrelationId());
+                            return createPostgresProduct(request);
+                        });
+
+                        // Wait for both to complete (or one to fail)
+                        scope.join();
+
+                        log.info("[{}] Successfully synced product to both databases: {}",
+                                RequestContext.getCorrelationId(), request.getName());
+
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.error("[{}] Interrupted while syncing product", RequestContext.getCorrelationId(), e);
+                        throw new RuntimeException("Interrupted while syncing product", e);
+                    } catch (StructuredTaskScope.FailedException e) {
+                        log.error("[{}] A subtask failed while syncing product", RequestContext.getCorrelationId(), e.getCause());
+                        throw new RuntimeException("Failed to sync product to both databases", e.getCause());
+                    }
+                });
     }
 
     private ProductResponse toMysqlResponse(MysqlProduct product) {
