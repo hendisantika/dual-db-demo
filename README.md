@@ -72,7 +72,7 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 
 ## Prerequisites
 
-- Java 24+ (JDK 24 or higher required for Spring Boot 4)
+- **Java 25** (JDK 25 required for Project Loom preview features)
 - Docker & Docker Compose
 - Maven
 
@@ -167,6 +167,122 @@ spring.datasource.postgresql.failover.health-check-interval=30000
 | `pool.max-lifetime`       | Maximum lifetime for connections (ms)  | `1800000` |
 | `pool.connection-timeout` | Connection timeout (ms)                | `30000`   |
 | `pool.validation-timeout` | Validation timeout (ms)                | `5000`    |
+
+## Project Loom Features (JDK 25)
+
+This application demonstrates three key Project Loom features that revolutionize concurrent programming in Java.
+
+### Virtual Threads
+
+Virtual Threads are lightweight threads managed by the JVM, enabling high-throughput concurrent applications without the
+overhead of platform threads.
+
+**Configuration** (`application.properties`):
+
+```properties
+# Enable Virtual Threads for Spring MVC
+spring.threads.virtual.enabled=true
+```
+
+**Benefits:**
+
+- Each HTTP request runs on a virtual thread
+- Can handle millions of concurrent connections
+- No thread pool tuning required
+- Blocking I/O doesn't waste resources
+
+### Structured Concurrency
+
+Structured Concurrency treats multiple concurrent tasks as a single unit of work, ensuring proper cleanup and error
+handling.
+
+**Example** (`ProductService.java`):
+
+```java
+public List<ProductResponse> getAllProductsFromBothDatabases() {
+    try (var scope = StructuredTaskScope.open()) {
+        // Fork parallel tasks - both inherit virtual thread context
+        var mysqlTask = scope.fork(this::getAllMysqlProducts);
+        var postgresTask = scope.fork(this::getAllPostgresProducts);
+
+        // Wait for both to complete (or one to fail)
+        scope.join();
+
+        // Merge results
+        return Stream.concat(
+                mysqlTask.get().stream(),
+                postgresTask.get().stream()
+        ).toList();
+    }
+}
+```
+
+**Benefits:**
+
+- Automatic cancellation if one task fails
+- Guaranteed cleanup when scope closes
+- Clear parent-child relationship in thread dumps
+- No orphaned threads
+
+### Scoped Values
+
+Scoped Values provide a safe way to share immutable data across threads, replacing `ThreadLocal` for virtual thread
+scenarios.
+
+**Definition** (`RequestContext.java`):
+
+```java
+public final class RequestContext {
+    public static final ScopedValue<String> CORRELATION_ID = ScopedValue.newInstance();
+    public static final ScopedValue<String> OPERATION = ScopedValue.newInstance();
+
+    public static String getCorrelationId() {
+        return CORRELATION_ID.orElse("unknown");
+    }
+}
+```
+
+**Usage** (`ProductService.java`):
+
+```java
+public List<ProductResponse> getAllProductsFromBothDatabases() {
+    String correlationId = UUID.randomUUID().toString().substring(0, 8);
+
+    return ScopedValue.where(RequestContext.CORRELATION_ID, correlationId)
+            .where(RequestContext.OPERATION, "getAllProductsFromBothDatabases")
+            .call(() -> {
+                // All forked subtasks automatically inherit these values!
+                try (var scope = StructuredTaskScope.open()) {
+                    scope.fork(() -> {
+                        // Can access RequestContext.getCorrelationId() here
+                        log.debug("[{}] Fetching from MySQL", RequestContext.getCorrelationId());
+                        return getAllMysqlProducts();
+                    });
+                    // ...
+                }
+            });
+}
+```
+
+**Benefits over ThreadLocal:**
+
+- Immutable by design (thread-safe)
+- Automatically inherited by child threads in `StructuredTaskScope`
+- More efficient memory usage with virtual threads
+- Clear lifecycle boundaries
+
+### Observing Project Loom in Action
+
+When you call the `/api/products/all` endpoint, you'll see logs like:
+
+```
+[a1b2c3d4] Starting parallel fetch from both databases
+[a1b2c3d4] Fetching from MySQL
+[a1b2c3d4] Fetching from PostgreSQL
+[a1b2c3d4] Successfully fetched products from both databases
+```
+
+The correlation ID (`a1b2c3d4`) is propagated to all subtasks via Scoped Values, making distributed tracing easy!
 
 ## API Endpoints
 
