@@ -22,15 +22,17 @@ This project also showcases **Project Loom** features available in JDK 25:
 - **Virtual Threads** for all HTTP request handling
 - **Structured Concurrency** for parallel database operations
 - **Scoped Values** for request context propagation
+- **Log4j2 Logging** with colored console output, rolling file appenders, and JSON structured logging
 
 ## Tech Stack
 
 - **Java 25** with Preview Features enabled
-- Spring Boot 4.0.0
-- Spring Framework 7.0.1
+- Spring Boot 4.0.1
+- Spring Framework 7.0.2
 - Spring Web MVC (with Virtual Threads)
 - Spring Data JPA
 - HikariCP (Connection Pooling)
+- **Log4j2** (Logging Framework)
 - MySQL 9.5.0
 - PostgreSQL 18
 - Docker Compose
@@ -54,6 +56,7 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 ├── context/
 │   └── RequestContext.java            # Scoped Values for request context
 ├── controller/
+│   ├── LoggingDemoController.java     # Log4j2 logging demo endpoints
 │   ├── MysqlProductController.java    # MySQL CRUD endpoints
 │   ├── PostgresProductController.java # PostgreSQL CRUD endpoints
 │   └── ProductController.java         # Combined endpoints
@@ -284,6 +287,109 @@ When you call the `/api/products/all` endpoint, you'll see logs like:
 
 The correlation ID (`a1b2c3d4`) is propagated to all subtasks via Scoped Values, making distributed tracing easy!
 
+## Log4j2 Logging
+
+This application uses **Log4j2** as the logging framework, replacing the default Logback. Log4j2 provides better
+performance, more features, and flexibility for enterprise applications.
+
+### Log4j2 Features
+
+- **Colored Console Output**: Different colors for each log level (INFO=green, DEBUG=cyan, WARN=yellow, ERROR=red,
+  FATAL=red blink)
+- **Rolling File Appenders**: Automatic log rotation by size (10MB) and time (daily)
+- **Error-Only Log File**: Separate file capturing only ERROR and FATAL level logs
+- **JSON Structured Logging**: Machine-readable JSON format for log aggregation systems
+- **Parameterized Logging**: Efficient string handling without concatenation overhead
+- **Marker-Based Logging**: Categorize logs (PERFORMANCE, SECURITY, BUSINESS)
+- **MDC Support**: Mapped Diagnostic Context for request tracing
+
+### Log Files
+
+Log files are created in the `logs/` directory:
+
+| File                     | Description                |
+|--------------------------|----------------------------|
+| `dual-db-demo.log`       | All application logs       |
+| `dual-db-demo-error.log` | ERROR and FATAL level only |
+| `dual-db-demo.json`      | JSON structured logs       |
+
+### Log4j2 Configuration
+
+Configuration is in `src/main/resources/log4j2.xml`:
+
+```xml
+<Configuration status="WARN" monitorInterval="30">
+    <Appenders>
+        <!-- Colored console output -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight{%-5level} [%style{%t}{bright,blue}] %style{%logger{36}}{cyan} - %msg%n"/>
+        </Console>
+
+        <!-- Rolling file with daily rotation -->
+        <RollingFile name="RollingFile" fileName="logs/dual-db-demo.log"
+                     filePattern="logs/dual-db-demo-%d{yyyy-MM-dd}-%i.log.gz">
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1"/>
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <Logger name="id.my.hendisantika.dualdbdemo" level="DEBUG"/>
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RollingFile"/>
+        </Root>
+    </Loggers>
+</Configuration>
+```
+
+### Logging Demo Endpoints
+
+The application includes demo endpoints showcasing Log4j2 features:
+
+| Method | Endpoint                                    | Description                                                          |
+|--------|---------------------------------------------|----------------------------------------------------------------------|
+| GET    | `/api/logging/levels`                       | Demonstrates all log levels (TRACE, DEBUG, INFO, WARN, ERROR, FATAL) |
+| GET    | `/api/logging/parameterized/{name}/{count}` | Parameterized logging (efficient)                                    |
+| GET    | `/api/logging/markers/{action}`             | Marker-based logging (PERFORMANCE, SECURITY, BUSINESS)               |
+| GET    | `/api/logging/exception/{type}`             | Exception logging with stack traces                                  |
+| GET    | `/api/logging/mdc/{userId}/{requestId}`     | MDC (Mapped Diagnostic Context) usage                                |
+| GET    | `/api/logging/conditional`                  | Conditional logging with isEnabled checks                            |
+
+### Logging Demo Examples
+
+```bash
+# Test all log levels
+curl http://localhost:8080/api/logging/levels
+
+# Test parameterized logging
+curl http://localhost:8080/api/logging/parameterized/TestUser/5
+
+# Test marker-based logging
+curl http://localhost:8080/api/logging/markers/purchase
+
+# Test exception logging
+curl http://localhost:8080/api/logging/exception/runtime
+
+# Test MDC context
+curl http://localhost:8080/api/logging/mdc/user123/req456
+
+# Test conditional logging
+curl http://localhost:8080/api/logging/conditional
+```
+
+### Sample Log Output
+
+```
+2025-12-19 10:17:48.749 DEBUG [tomcat-handler-0] id.my.hendisantika.dualdbdemo.controller.LoggingDemoController - This is a DEBUG level message
+2025-12-19 10:17:48.749 INFO  [tomcat-handler-0] id.my.hendisantika.dualdbdemo.controller.LoggingDemoController - This is an INFO level message
+2025-12-19 10:17:48.749 WARN  [tomcat-handler-0] id.my.hendisantika.dualdbdemo.controller.LoggingDemoController - This is a WARN level message
+2025-12-19 10:17:48.749 ERROR [tomcat-handler-0] id.my.hendisantika.dualdbdemo.controller.LoggingDemoController - This is an ERROR level message
+2025-12-19 10:17:48.750 FATAL [tomcat-handler-0] id.my.hendisantika.dualdbdemo.controller.LoggingDemoController - This is a FATAL level message
+```
+
 ## API Endpoints
 
 ### MySQL Products
@@ -314,6 +420,17 @@ The correlation ID (`a1b2c3d4`) is propagated to all subtasks via Scoped Values,
 |--------|----------|-------------|
 | GET | `/api/products/all` | Get all products from both databases |
 | POST | `/api/products/sync` | Create product in both databases |
+
+### Logging Demo
+
+| Method | Endpoint                                    | Description                |
+|--------|---------------------------------------------|----------------------------|
+| GET    | `/api/logging/levels`                       | Demonstrate all log levels |
+| GET    | `/api/logging/parameterized/{name}/{count}` | Parameterized logging      |
+| GET    | `/api/logging/markers/{action}`             | Marker-based logging       |
+| GET    | `/api/logging/exception/{type}`             | Exception logging          |
+| GET    | `/api/logging/mdc/{userId}/{requestId}`     | MDC context logging        |
+| GET    | `/api/logging/conditional`                  | Conditional logging        |
 
 ## Curl Examples
 
