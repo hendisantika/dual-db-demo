@@ -9,6 +9,7 @@ mysql_secondary_data
 postgres_data
 postgres_primary_data
 postgres_secondary_data
+redis_data
 
 ### STS ###
 .apt_generated

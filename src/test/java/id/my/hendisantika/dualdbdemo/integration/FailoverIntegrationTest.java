@@ -1,5 +1,6 @@
 package id.my.hendisantika.dualdbdemo.integration;
 
+import id.my.hendisantika.dualdbdemo.config.TestRedisConfig;
 import id.my.hendisantika.dualdbdemo.dto.ProductRequest;
 import id.my.hendisantika.dualdbdemo.dto.ProductResponse;
 import id.my.hendisantika.dualdbdemo.service.ProductService;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -32,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Import(TestRedisConfig.class)
 class FailoverIntegrationTest {
 
     @Autowired

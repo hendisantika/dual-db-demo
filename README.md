@@ -16,6 +16,8 @@ This project also showcases **Project Loom** features available in JDK 25:
 - **Automatic database connection failover with multiple hosts**
 - **Health monitoring with automatic failback to primary**
 - HikariCP connection pooling for both databases
+- **HTTP Client with Connection Pooling** using Apache HttpClient 5
+- **Redis Fallback for HTTP Client** - cached response fallback when HTTP requests fail
 - Health check endpoints via Spring Actuator
 - Docker Compose setup for databases (primary & secondary instances)
 - Sync product to both databases simultaneously
@@ -31,7 +33,10 @@ This project also showcases **Project Loom** features available in JDK 25:
 - Spring Framework 7.0.2
 - Spring Web MVC (with Virtual Threads)
 - Spring Data JPA
+- Spring Data Redis
 - HikariCP (Connection Pooling)
+- **Apache HttpClient 5** (HTTP Client Connection Pooling)
+- **Redis 7.4** (Caching & HTTP Fallback)
 - **Log4j2** (Logging Framework)
 - MySQL 9.5.0
 - PostgreSQL 18
@@ -47,10 +52,13 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 ├── config/
 │   ├── MysqlJdbcConfig.java           # MySQL JDBC configuration with failover
 │   ├── PostgresJdbcConfig.java        # PostgreSQL JDBC configuration with failover
+│   ├── RestClientConfig.java          # HTTP Client with Apache HttpClient 5 pooling
+│   ├── RedisConfig.java               # Redis configuration for fallback caching
 │   └── properties/
 │       ├── DatabaseHost.java          # Host configuration (host & port)
 │       ├── HikariPoolProperties.java  # HikariCP connection pool settings
 │       ├── FailoverProperties.java    # Failover configuration
+│       ├── HttpClientPoolProperties.java # HTTP client pool settings
 │       ├── MysqlProperties.java       # MySQL-specific properties
 │       └── PostgresProperties.java    # PostgreSQL-specific properties
 ├── context/
@@ -70,7 +78,8 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 │   ├── mysql/MysqlProductRepository.java
 │   └── postgresql/PostgresProductRepository.java
 └── service/
-    └── ProductService.java            # Uses Structured Concurrency + Scoped Values
+    ├── ProductService.java            # Uses Structured Concurrency + Scoped Values
+    └── HttpClientService.java         # HTTP client with Redis fallback
 ```
 
 ## Prerequisites
@@ -92,6 +101,7 @@ This will start:
 - MySQL 9.5.0 Secondary on port `3309` (failover)
 - PostgreSQL 18 Primary on port `5433`
 - PostgreSQL 18 Secondary on port `5434` (failover)
+- Redis 7.4 on port `6379` (HTTP client fallback cache)
 
 ### 2. Run the Application
 
@@ -170,6 +180,119 @@ spring.datasource.postgresql.failover.health-check-interval=30000
 | `pool.max-lifetime`       | Maximum lifetime for connections (ms)  | `1800000` |
 | `pool.connection-timeout` | Connection timeout (ms)                | `30000`   |
 | `pool.validation-timeout` | Validation timeout (ms)                | `5000`    |
+
+## HTTP Client with Redis Fallback
+
+This application includes an HTTP client service with built-in Redis fallback. When an HTTP request fails (due to network issues, server errors, etc.), the service automatically attempts to retrieve cached data from Redis.
+
+### How It Works
+
+```
+HTTP Request → Success → Cache response to Redis → Return response
+             ↓
+           Failed → Lookup Redis cache → Found → Return cached data
+                                       ↓
+                                    Not Found → Throw original exception
+```
+
+### Features
+
+- **Automatic Caching**: Successful HTTP responses are automatically cached in Redis
+- **Transparent Fallback**: When HTTP fails, cached data is returned seamlessly
+- **Configurable TTL**: Cache expiration time is configurable
+- **Connection Pooling**: Apache HttpClient 5 with optimized connection pool
+- **Context Propagation**: Correlation ID and User ID headers are automatically propagated
+
+### Configuration
+
+```properties
+# Redis Configuration
+spring.data.redis.host=localhost
+spring.data.redis.port=6379
+spring.data.redis.database=0
+spring.data.redis.timeout=5000
+spring.data.redis.lettuce.pool.enabled=true
+spring.data.redis.lettuce.pool.max-active=10
+spring.data.redis.lettuce.pool.max-idle=5
+spring.data.redis.lettuce.pool.min-idle=2
+
+# HTTP Client Fallback Configuration
+http.client.fallback.enabled=true
+http.client.fallback.cache-ttl-minutes=30
+
+# HTTP Client Connection Pool Configuration
+http.client.pool.max-total=200
+http.client.pool.max-per-route=50
+http.client.pool.connection-timeout=5000
+http.client.pool.socket-timeout=30000
+http.client.pool.connection-request-timeout=5000
+http.client.pool.connection-time-to-live=300000
+http.client.pool.idle-connection-timeout=60000
+http.client.pool.validate-after-inactivity=2000
+http.client.pool.evict-expired-connections=true
+http.client.pool.eviction-interval=10000
+```
+
+### HTTP Client Pool Properties
+
+| Property                          | Description                                | Default   |
+|-----------------------------------|-------------------------------------------|-----------|
+| `pool.max-total`                  | Maximum total connections in pool         | `200`     |
+| `pool.max-per-route`              | Maximum connections per route             | `50`      |
+| `pool.connection-timeout`         | Connection timeout (ms)                   | `5000`    |
+| `pool.socket-timeout`             | Socket read timeout (ms)                  | `30000`   |
+| `pool.connection-request-timeout` | Time to wait for connection from pool (ms)| `5000`    |
+| `pool.connection-time-to-live`    | Maximum connection lifetime (ms)          | `300000`  |
+| `pool.idle-connection-timeout`    | Idle connection timeout (ms)              | `60000`   |
+| `pool.validate-after-inactivity`  | Validate connection after inactivity (ms) | `2000`    |
+
+### Fallback Properties
+
+| Property                          | Description                           | Default |
+|-----------------------------------|---------------------------------------|---------|
+| `fallback.enabled`                | Enable/disable Redis fallback         | `true`  |
+| `fallback.cache-ttl-minutes`      | Cache TTL in minutes                  | `30`    |
+
+### Usage Example
+
+```java
+@Autowired
+private HttpClientService httpClientService;
+
+// Simple GET request with automatic caching and fallback
+String response = httpClientService.get("https://api.example.com/data", String.class);
+
+// GET with path variables
+Product product = httpClientService.get("https://api.example.com/products/{id}", Product.class, 123);
+
+// GET with query parameters
+Map<String, String> params = Map.of("category", "electronics", "limit", "10");
+List<Product> products = httpClientService.getWithParams("https://api.example.com/products", ProductList.class, params);
+
+// Manual cache operations
+httpClientService.cacheValue("https://api.example.com/data", myData);
+httpClientService.invalidateCache("https://api.example.com/data");
+```
+
+### Expected Log Output
+
+When HTTP request succeeds:
+```
+DEBUG HttpClientService - Executing GET request to: https://api.example.com/data
+DEBUG HttpClientService - Cached response for key: http:cache:123456789
+```
+
+When HTTP request fails but cache is available:
+```
+WARN  HttpClientService - HTTP request failed for URL: https://api.example.com/data. Error: Connection refused
+INFO  HttpClientService - HTTP request failed, returning cached data for key: http:cache:123456789
+```
+
+When HTTP request fails and no cache:
+```
+WARN  HttpClientService - HTTP request failed for URL: https://api.example.com/data. Error: Connection refused
+WARN  HttpClientService - No cached data available for key: http:cache:123456789
+```
 
 ## Project Loom Features (JDK 25)
 
