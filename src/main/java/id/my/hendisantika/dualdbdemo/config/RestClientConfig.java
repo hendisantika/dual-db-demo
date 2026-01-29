@@ -1,5 +1,7 @@
 package id.my.hendisantika.dualdbdemo.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import id.my.hendisantika.dualdbdemo.config.properties.HttpClientPoolProperties;
 import id.my.hendisantika.dualdbdemo.context.RequestContext;
 import org.apache.hc.client5.http.config.ConnectionConfig;
@@ -121,5 +123,17 @@ public class RestClientConfig {
     public RestClient.Builder restClientBuilder(HttpComponentsClientHttpRequestFactory requestFactory) {
         return RestClient.builder()
                 .requestFactory(requestFactory);
+    }
+
+    /**
+     * Creates ObjectMapper bean for JSON serialization/deserialization.
+     * Used by HttpClientService for Redis cache serialization.
+     */
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+        mapper.findAndRegisterModules();
+        return mapper;
     }
 }
