@@ -25,6 +25,7 @@ This project also showcases **Project Loom** features available in JDK 25:
 - **Structured Concurrency** for parallel database operations
 - **Scoped Values** for request context propagation
 - **Log4j2 Logging** with colored console output, rolling file appenders, and JSON structured logging
+- **API Metrics Monitoring** with OpenTelemetry, Prometheus, and Grafana dashboards
 
 ## Tech Stack
 
@@ -43,6 +44,7 @@ This project also showcases **Project Loom** features available in JDK 25:
 - Docker Compose
 - Lombok (edge-SNAPSHOT for JDK 25 compatibility)
 - **Project Loom**: Virtual Threads, Structured Concurrency, Scoped Values
+- **Observability Stack**: Micrometer, Prometheus, Grafana
 
 ## Project Structure
 
@@ -90,7 +92,7 @@ src/main/java/id/my/hendisantika/dualdbdemo/
 
 ## Getting Started
 
-### 1. Start the Databases
+### 1. Start the Infrastructure
 
 ```bash
 docker compose up -d
@@ -102,6 +104,8 @@ This will start:
 - PostgreSQL 18 Primary on port `5433`
 - PostgreSQL 18 Secondary on port `5434` (failover)
 - Redis 7.4 on port `6379` (HTTP client fallback cache)
+- Prometheus on port `9090` (metrics collection)
+- Grafana on port `3000` (metrics visualization)
 
 ### 2. Run the Application
 
@@ -409,6 +413,120 @@ When you call the `/api/products/all` endpoint, you'll see logs like:
 ```
 
 The correlation ID (`a1b2c3d4`) is propagated to all subtasks via Scoped Values, making distributed tracing easy!
+
+## API Metrics Monitoring with OpenTelemetry, Prometheus & Grafana
+
+This application includes comprehensive API metrics monitoring using Micrometer (OpenTelemetry-compatible), Prometheus, and Grafana. Track request counts, response times, and visualize API performance in real-time.
+
+### What's Being Tracked
+
+The application automatically tracks:
+
+- **Request Count**: Total number of hits per API endpoint
+- **Response Time**: Latency percentiles (p50, p95, p99)
+- **HTTP Status Codes**: Distribution of 2xx, 4xx, 5xx responses
+- **Request Rate**: Requests per second for each endpoint
+- **Endpoint-Specific Metrics**: Dedicated counters for `/api/products/*` endpoints
+
+### Quick Start
+
+1. **Start Prometheus & Grafana**:
+   ```bash
+   docker compose up -d prometheus grafana
+   ```
+
+2. **Start the Application**:
+   ```bash
+   mvn spring-boot:run
+   ```
+
+3. **Generate Traffic** (optional):
+   ```bash
+   ./test-metrics.sh
+   ```
+
+4. **View Dashboard**:
+   - Open Grafana: http://localhost:3000 (admin/admin)
+   - Navigate to: **Dashboards** → **Dual DB Demo - API Metrics**
+
+### Access Points
+
+| Service          | URL                                       | Description                    |
+|------------------|-------------------------------------------|--------------------------------|
+| Grafana          | http://localhost:3000                     | Metrics dashboards (admin/admin)|
+| Prometheus       | http://localhost:9090                     | Metrics database & query UI    |
+| Actuator Metrics | http://localhost:8080/actuator/prometheus | Raw metrics endpoint           |
+
+### Dashboard Features
+
+The pre-configured Grafana dashboard includes:
+
+1. **Request Rate Graph**: Real-time requests/second for `/api/products/all`
+2. **Total Hits Counter**: Cumulative hit count for each endpoint
+3. **Response Time Percentiles**: p50, p95, p99 latency trends
+4. **Status Distribution**: Pie chart showing HTTP status codes
+5. **Endpoints Summary Table**: All API endpoints with hit counts
+6. **Request Rate by Endpoint**: Stacked area chart of all product APIs
+
+### Example Prometheus Queries
+
+```promql
+# Total hits for /api/products/all
+sum(api_products_hits_total{endpoint="/api/products/all"})
+
+# Request rate (requests per second)
+rate(api_products_hits_total[1m])
+
+# P95 response time
+histogram_quantile(0.95,
+  sum(rate(api_request_duration_milliseconds_bucket[5m])) by (le)
+)
+```
+
+### Testing the Metrics
+
+Use the included test script to generate API traffic:
+
+```bash
+# Make executable
+chmod +x test-metrics.sh
+
+# Run interactive menu
+./test-metrics.sh
+```
+
+Options include:
+- Quick test (50 GET requests)
+- Load test (1000 requests)
+- Create products (POST requests)
+- Mixed traffic scenarios
+- Continuous load testing
+
+### Manual Testing
+
+```bash
+# Generate 100 hits to /api/products/all
+for i in {1..100}; do
+  curl -s http://localhost:8080/api/products/all > /dev/null
+  echo -n "."
+done
+
+# Check metrics in Prometheus
+open http://localhost:9090/graph?g0.expr=api_products_hits_total
+```
+
+### Custom Metrics Configuration
+
+Metrics are configured in src/main/java/id/my/hendisantika/dualdbdemo/config/MetricsConfig.java:571:13
+
+- **ApiMetricsInterceptor**: Intercepts all HTTP requests
+- **Counters**: Track request counts by URI, method, and status
+- **Timers**: Measure request duration with histogram buckets
+
+### Detailed Guide
+
+For comprehensive setup instructions, troubleshooting, and advanced features, see:
+- [METRICS_GUIDE.md](METRICS_GUIDE.md) - Complete metrics monitoring guide
 
 ## Log4j2 Logging
 
