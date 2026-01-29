@@ -1,5 +1,82 @@
 # Dual Database Demo
 
+[![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.1-brightgreen?logo=spring)](https://spring.io/projects/spring-boot)
+[![MySQL](https://img.shields.io/badge/MySQL-9.5.0-blue?logo=mysql)](https://www.mysql.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-blue?logo=postgresql)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7.4-red?logo=redis)](https://redis.io/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-latest-orange?logo=prometheus)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-latest-orange?logo=grafana)](https://grafana.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tested](https://img.shields.io/badge/Status-Verified%20Working-success)](https://github.com/hendisantika/dual-db-demo)
+
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [Database Connection Failover](#database-connection-failover)
+- [HTTP Client with Redis Fallback](#http-client-with-redis-fallback)
+- [Project Loom Features (JDK 25)](#project-loom-features-jdk-25)
+- [API Metrics Monitoring](#api-metrics-monitoring-with-opentelemetry-prometheus--grafana)
+- [Log4j2 Logging](#log4j2-logging)
+- [API Endpoints](#api-endpoints)
+- [Testing Failover](#testing-failover)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## Quick Start
+
+Get up and running in 3 minutes:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/hendisantika/dual-db-demo.git
+cd dual-db-demo
+
+# 2. Start all infrastructure services
+docker compose up -d
+
+# 3. Wait for services to be healthy (~15 seconds)
+sleep 15 && docker compose ps
+
+# 4. Run the application
+./mvnw spring-boot:run
+
+# 5. Test the application (in a new terminal)
+curl http://localhost:8080/actuator/health
+
+# 6. Create a test product
+curl -X POST http://localhost:8080/api/products/sync \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test Product","description":"Quick start test","price":99.99,"quantity":10}'
+
+# 7. View all products from both databases
+curl http://localhost:8080/api/products/all | jq
+
+# 8. Access Grafana dashboard
+open http://localhost:3000  # Login: admin/admin
+# Navigate to Dashboards → Dual DB Demo - API Metrics
+
+# 9. Generate traffic to see metrics
+./test-metrics.sh
+```
+
+**Access Points:**
+- Application: http://localhost:8080
+- Health Check: http://localhost:8080/actuator/health
+- Metrics: http://localhost:8080/actuator/prometheus
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/admin)
+
+---
+
 A Spring Boot application demonstrating CRUD operations with **dual database** support using **Spring Data JPA** with *
 *HikariCP** for both **MySQL 9.5.0** and **PostgreSQL 18** with **automatic database connection failover** support.
 
@@ -528,6 +605,95 @@ Metrics are configured in src/main/java/id/my/hendisantika/dualdbdemo/config/Met
 For comprehensive setup instructions, troubleshooting, and advanced features, see:
 - [METRICS_GUIDE.md](METRICS_GUIDE.md) - Complete metrics monitoring guide
 
+
+### Grafana Setup Troubleshooting
+
+**If dashboard shows no data:**
+
+1. **Verify datasource UID is correct:**
+   ```bash
+   curl -s http://admin:admin@localhost:3000/api/datasources | jq '.[].uid'
+   ```
+   Should return: `"prometheus"`
+
+2. **If you see a different UID**, the datasource was auto-assigned a random UUID:
+   - The dashboard won't work with a random UID
+   - Solution: Restart Grafana with correct configuration:
+     ```bash
+     docker compose down grafana
+     docker volume rm dual-db-demo_grafana_data
+     docker compose up -d grafana
+     ```
+
+3. **Test Prometheus query directly:**
+   ```bash
+   curl -s 'http://localhost:9090/api/v1/query?query=api_products_hits_total' | jq
+   ```
+
+4. **Generate traffic and wait:**
+   ```bash
+   for i in {1..50}; do curl -s http://localhost:8080/api/products/all > /dev/null; done
+   sleep 10  # Wait for Prometheus to scrape
+   ```
+
+5. **Refresh Grafana dashboard:** The metrics should now appear!
+
+
+
+
+## Screenshots & Dashboard Views
+
+### Grafana Dashboard
+
+The Grafana dashboard provides real-time visualization of API metrics:
+
+**Main Dashboard View:**
+- Request rate graphs showing requests/second
+- Total hits counters for each endpoint
+- Response time percentiles (p50, p95, p99)
+- HTTP status code distribution pie chart
+
+**Example Queries:**
+
+Dashboard URL: http://localhost:3000/d/dual-db-api-metrics/dual-db-demo-api-metrics
+
+![Grafana Dashboard](https://img.shields.io/badge/View-Grafana_Dashboard-orange?logo=grafana)
+
+**Key Panels:**
+
+1. **Request Rate**: Shows real-time traffic to `/api/products/all`
+2. **Total Hits**: Displays cumulative request count
+3. **Response Times**: Tracks latency trends
+4. **Status Codes**: Visualizes success vs error rates
+5. **Endpoints Table**: Lists all API endpoints with metrics
+
+### Prometheus Metrics
+
+Access raw metrics and query interface:
+
+URL: http://localhost:9090
+
+![Prometheus](https://img.shields.io/badge/View-Prometheus-orange?logo=prometheus)
+
+**Useful Queries:**
+- `api_products_hits_total` - Total hits per endpoint
+- `rate(api_request_count_total[1m])` - Requests per second
+- `api_request_duration_seconds_sum / api_request_duration_seconds_count` - Average response time
+
+### Application Health
+
+Health check dashboard showing all components:
+
+URL: http://localhost:8080/actuator/health
+
+**Monitored Components:**
+- MySQL Primary & Secondary datasources
+- PostgreSQL Primary & Secondary datasources
+- Redis connection
+- Disk space
+- Liveness & Readiness probes
+
+
 ## Log4j2 Logging
 
 This application uses **Log4j2** as the logging framework, replacing the default Logback. Log4j2 provides better
@@ -979,7 +1145,53 @@ docker compose restart
 ./mvnw test -X
 ```
 
+
 ## Troubleshooting
+
+### Application Fails to Start
+
+**Problem**: `No qualifying bean of type 'com.fasterxml.jackson.databind.ObjectMapper'`
+
+**Solution**: This has been fixed in the latest version. The `RestClientConfig` now includes an `ObjectMapper` bean. Pull the latest changes.
+
+### Grafana Dashboard Shows No Data
+
+**Problem**: Dashboard panels show "No data" or counters are at zero
+
+**Solutions**:
+1. **Check Prometheus is scraping**:
+   ```bash
+   curl http://localhost:9090/api/v1/targets
+   ```
+   Look for `dual-db-demo` job with `health: "up"`
+
+2. **Verify metrics are being exposed**:
+   ```bash
+   curl http://localhost:8080/actuator/prometheus | grep api_
+   ```
+
+3. **Check Grafana datasource UID**:
+   - The datasource UID must be `prometheus` (not a random UUID)
+   - This is now fixed in `grafana/provisioning/datasources/prometheus.yml`
+   - If you see errors, restart Grafana: `docker compose restart grafana`
+
+4. **Generate some traffic**:
+   ```bash
+   ./test-metrics.sh
+   ```
+   Or manually:
+   ```bash
+   for i in {1..50}; do curl -s http://localhost:8080/api/products/all > /dev/null; done
+   ```
+
+5. **Wait for Prometheus to scrape**:
+   - Default scrape interval is 5 seconds
+   - Wait ~10 seconds after generating traffic
+
+6. **Check dashboard queries**:
+   - Open Grafana dashboard
+   - Click on a panel → Edit
+   - Verify the query syntax matches: `api_products_hits_total{endpoint="/api/products/all"}`
 
 ### Connection Refused Errors
 
@@ -988,6 +1200,10 @@ If you see "Connection refused" errors:
 1. Ensure Docker containers are running: `docker compose ps`
 2. Check if ports are available: `lsof -i :3308` and `lsof -i :5433`
 3. Verify database credentials in `application.properties`
+4. Check if services are healthy:
+   ```bash
+   docker compose ps | grep healthy
+   ```
 
 ### Failover Not Working
 
@@ -1005,6 +1221,110 @@ If the application doesn't failback to primary:
 1. Increase `health-check-interval` if primary takes longer to restart
 2. Check that primary is fully ready (not just started)
 3. Verify primary database is accessible from the application
+
+### Redis Connection Errors
+
+**Problem**: `Unable to connect to Redis`
+
+**Solutions**:
+1. Check Redis is running: `docker compose ps redis`
+2. Test Redis connection:
+   ```bash
+   docker exec -it dual-db-redis redis-cli ping
+   ```
+   Should return `PONG`
+3. Check Redis logs: `docker compose logs redis`
+
+### Port Already in Use
+
+**Problem**: `Bind for 0.0.0.0:3308 failed: port is already allocated`
+
+**Solutions**:
+1. Check what's using the port:
+   ```bash
+   lsof -i :3308
+   ```
+2. Stop conflicting services or change port in `compose.yaml`
+
+### Prometheus Not Scraping Application
+
+**Problem**: Prometheus shows `dual-db-demo` target as DOWN
+
+**Solutions**:
+1. Check if application is running: `curl http://localhost:8080/actuator/health`
+2. Verify `host.docker.internal` resolves:
+   ```bash
+   docker exec dual-db-prometheus ping host.docker.internal -c 1
+   ```
+3. Check Prometheus logs: `docker compose logs prometheus`
+4. Verify metrics endpoint is accessible from Prometheus container:
+   ```bash
+   docker exec dual-db-prometheus wget -qO- http://host.docker.internal:8080/actuator/prometheus
+   ```
+
+### Grafana Provisioning Errors
+
+**Problem**: `Datasource provisioning error: data source not found`
+
+**Solution**: This was caused by datasource UID mismatch. The latest configuration fixes this:
+1. Stop Grafana: `docker compose down grafana`
+2. Remove volume: `docker volume rm dual-db-demo_grafana_data`
+3. Start Grafana: `docker compose up -d grafana`
+
+### Log Files Not Created
+
+**Problem**: No log files in `logs/` directory
+
+**Solutions**:
+1. Create logs directory: `mkdir -p logs`
+2. Check file permissions
+3. Verify Log4j2 configuration in `src/main/resources/log4j2.xml`
+
+## Common Questions
+
+### How do I view metrics in Prometheus?
+
+1. Open http://localhost:9090
+2. Click "Graph" tab
+3. Enter query: `api_products_hits_total`
+4. Click "Execute"
+
+### How do I access Grafana dashboards?
+
+1. Open http://localhost:3000
+2. Login with `admin` / `admin`
+3. Navigate to **Dashboards** → **Dual DB Demo - API Metrics**
+
+### How do I test failover manually?
+
+See the [Testing Failover](#testing-failover) section for detailed steps.
+
+### What ports are used?
+
+| Service              | Port   | URL                              |
+|----------------------|--------|----------------------------------|
+| Application          | 8080   | http://localhost:8080            |
+| MySQL Primary        | 3308   | localhost:3308                   |
+| MySQL Secondary      | 3309   | localhost:3309                   |
+| PostgreSQL Primary   | 5433   | localhost:5433                   |
+| PostgreSQL Secondary | 5434   | localhost:5434                   |
+| Redis                | 6379   | localhost:6379                   |
+| Prometheus           | 9090   | http://localhost:9090            |
+| Grafana              | 3000   | http://localhost:3000            |
+
+### How do I reset everything?
+
+```bash
+# Stop all containers
+docker compose down
+
+# Remove all volumes (WARNING: deletes all data)
+docker volume rm dual-db-demo_grafana_data                  dual-db-demo_mysql_primary_data                  dual-db-demo_mysql_secondary_data                  dual-db-demo_postgres_primary_data                  dual-db-demo_postgres_secondary_data                  dual-db-demo_prometheus_data                  dual-db-demo_redis_data
+
+# Start fresh
+docker compose up -d
+./mvnw spring-boot:run
+```
 
 ## License
 
